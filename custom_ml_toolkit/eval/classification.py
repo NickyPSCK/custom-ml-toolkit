@@ -101,3 +101,33 @@ def plot_confusion_matrix(y_true, y_pred):
         annot=True,
         cbar=False
     )
+
+def create_lift_data(
+    y_true: list, 
+    y_pred_proba: list, 
+    bin_size:int = None,
+    q:int = None
+):
+    if (bin_size is None) and (q is None):
+        ValueError('Either bin_size or q must be spacified.')
+    elif (bin_size is not None) and (q is not None):
+        ValueError('Cannot spacify both bin_siza or q at the same time.')
+
+    lift_df = pd.DataFrame({
+        'y_true': y_true.to_list(),
+        'y_pred_proba': list(y_pred_proba[:, 1])
+    })\
+        .sort_values('y_pred_proba', ascending=False)\
+        .reset_index(drop=True)\
+        .reset_index(drop=False)
+
+    if q is not None:
+        lift_df['bin'] = pd.qcut(lift_df['index'], q=q, labels=False) + 1
+    else:
+        lift_df['bin'] = ((lift_df['index'] // bin_size) + 1) * bin_size
+
+    lift_curve_df = (
+        100 * (lift_df.groupby('bin')['y_true'].sum() 
+        / lift_df.groupby('bin')['y_true'].count())
+    ).reset_index()
+    return lift_curve_df
