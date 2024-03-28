@@ -9,7 +9,9 @@ def plot_feature_importances(
     feature_importance,
     feature_names,
     top_n=None,
-    figsize=(7, 7)
+    plot_paleto:bool=False,
+    figsize=(7, 7),
+    paleto_figsize=(7, 7),
 ):
     feature_name_col = 'feature_names'
     imp_score_col = 'score'
@@ -48,27 +50,28 @@ def plot_feature_importances(
     plt.ylabel('Feature Names')
     plt.show()
 
-    fig, ax1 = plt.subplots()
-    fig.set_size_inches(*figsize)
-    ax1.bar(
-        feat_imp_df[feature_name_col],
-        feat_imp_df[percent_imp_score_col],
-        color='C0'
-    )
-    ax2 = ax1.twinx()
-    ax2.plot(
-        feat_imp_df[feature_name_col],
-        feat_imp_df[cum_percent_imp_score_col],
-        color='C1',
-        marker='D',
-        ms=7
-    )
+    if plot_paleto:
+        fig, ax1 = plt.subplots()
+        fig.set_size_inches(*paleto_figsize)
+        ax1.bar(
+            feat_imp_df[feature_name_col],
+            feat_imp_df[percent_imp_score_col],
+            color='C0'
+        )
+        ax2 = ax1.twinx()
+        ax2.plot(
+            feat_imp_df[feature_name_col],
+            feat_imp_df[cum_percent_imp_score_col],
+            color='C1',
+            marker='D',
+            ms=7
+        )
 
-    ax1.tick_params(axis='y', colors='C0', labelrotation=0)
-    ax2.tick_params(axis='y', colors='C1', labelrotation=0)
-    ax1.tick_params(axis='x', labelrotation=90)
+        ax1.tick_params(axis='y', colors='C0', labelrotation=0)
+        ax2.tick_params(axis='y', colors='C1', labelrotation=0)
+        ax1.tick_params(axis='x', labelrotation=90)
 
-    plt.show()
+        plt.show()
 
     return all_feat_imp_df
 
