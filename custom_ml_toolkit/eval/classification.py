@@ -1,5 +1,5 @@
 import pandas as pd
-from sklearn.metrics import classification_report
+from sklearn.metrics import classification_report, roc_auc_score
 import seaborn as sns
 import matplotlib.pyplot as plt
 
@@ -102,9 +102,10 @@ def plot_confusion_matrix(y_true, y_pred):
         cbar=False
     )
 
+
 def create_lift_data(
     y_true: list, 
-    y_pred_proba: list, 
+    y_score: list, 
     bin_size:int = None,
     q:int = None
 ):
@@ -113,21 +114,74 @@ def create_lift_data(
     elif (bin_size is not None) and (q is not None):
         ValueError('Cannot spacify both bin_siza or q at the same time.')
 
-    lift_df = pd.DataFrame({
+    lift_raw_data_df = pd.DataFrame({
         'y_true': y_true.to_list(),
-        'y_pred_proba': list(y_pred_proba[:, 1])
+        'y_score': list(y_score)
     })\
-        .sort_values('y_pred_proba', ascending=False)\
+        .sort_values('y_score', ascending=False)\
         .reset_index(drop=True)\
         .reset_index(drop=False)
 
     if q is not None:
-        lift_df['bin'] = pd.qcut(lift_df['index'], q=q, labels=False) + 1
+        lift_raw_data_df['bin'] = pd.qcut(lift_raw_data_df['index'], q=q, labels=False) + 1
     else:
-        lift_df['bin'] = ((lift_df['index'] // bin_size) + 1) * bin_size
+        lift_raw_data_df['bin'] = ((lift_raw_data_df['index'] // bin_size) + 1) * bin_size
 
     lift_curve_df = (
-        100 * (lift_df.groupby('bin')['y_true'].sum() 
-        / lift_df.groupby('bin')['y_true'].count())
+        100 * (lift_raw_data_df.groupby('bin')['y_true'].sum() 
+        / lift_raw_data_df.groupby('bin')['y_true'].count())
     ).reset_index()
-    return lift_curve_df
+    return lift_raw_data_df, lift_curve_df
+
+def plot_lift_curve(
+    data: dict,
+    bin_size: int = None,
+    q: int = None,
+    baseline: float = None,
+    title: str = 'Lift Chart',
+    xlim: tuple = None,
+    ylim: tuple = None,
+    figsize: tuple = (10, 4)
+):
+    fig, ax = plt.subplots(figsize=figsize)
+
+    legend_list = list()
+    raw_dict = dict()
+    
+    for pair_name in data:
+        y_true=data[pair_name][0]
+        y_score=data[pair_name][1]
+        lift_raw_data_df, lift_curve_df = create_lift_data(
+            y_true=y_true, 
+            y_score=y_score, 
+            bin_size=bin_size, 
+            q=q
+        )
+        gini_score = 2 * roc_auc_score(y_true=y_true, y_score=y_score) - 1
+        legend_list.append(f'{pair_name}, GINI {gini_score:.4f}')
+        ax.plot(lift_curve_df['bin'], lift_curve_df['y_true'], 'o', linestyle='-')
+        raw_dict[pair_name] = {
+            'raw_data': lift_raw_data_df,
+            'curve_data': lift_curve_df
+        }
+            
+    if baseline is not None:
+        ax.axhline(
+            y=baseline, 
+            color='r', 
+            linestyle='-'
+        ) 
+        legend_list.append(f'Baseline: {baseline}')
+
+    ax.legend(legend_list)
+    ax.tick_params(axis='x', labelrotation=0)
+    plt.title(title)
+    plt.xlabel('Bucket')
+    plt.ylabel('%Target')
+    plt.grid(visible=True, which='major', axis='both')
+    if xlim is not None:
+        plt.xlim(*xlim)
+    if ylim is not None:        
+        plt.ylim(*ylim)
+    plt.show()
+    return raw_dict
