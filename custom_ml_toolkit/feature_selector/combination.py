@@ -119,32 +119,33 @@ class ConbinatoricFeatureGenerator:
             return self._remaining_budget 
         else:
             return self._remaining
+
+if __name__ == '__main__':
+    r_start = 1
+    r_end = 3
+    required_cols = ['r_1', 'r_2', ['r_3', 'r_4']]
+    selected_cols = ['e_1', 'e_2', ['e_3_1', 'e_3_2']]
+    budget = 1
     
-r_start = 1
-r_end = 3
-required_cols = ['r_1', 'r_2', ['r_3', 'r_4']]
-selected_cols = ['e_1', 'e_2', ['e_3_1', 'e_3_2']]
-budget = 1
-
-cfg = ConbinatoricFeatureGenerator(
-    r_start=r_start,
-    r_end=r_end,
-    selected_cols=selected_cols,
-    required_cols=required_cols,
-    budget=budget
-)
-
-print(cfg.number_of_cases)
-
-for removed_members, combination in cfg:
-    print(cfg.remaining, removed_members, combination)
-
-cfg.budget = 2
-
-for removed_members, combination in cfg:
-    print(cfg.remaining, removed_members, combination)
-
-cfg.budget = -1
-
-for removed_members, combination in tqdm(cfg):
-    print(cfg.remaining, removed_members, combination)
+    cfg = ConbinatoricFeatureGenerator(
+        r_start=r_start,
+        r_end=r_end,
+        selected_cols=selected_cols,
+        required_cols=required_cols,
+        budget=budget
+    )
+    
+    print(cfg.number_of_cases)
+    
+    for removed_members, combination in cfg:
+        print(cfg.remaining, removed_members, combination)
+    
+    cfg.budget = 2
+    
+    for removed_members, combination in cfg:
+        print(cfg.remaining, removed_members, combination)
+    
+    cfg.budget = -1
+    
+    for removed_members, combination in tqdm(cfg):
+        print(cfg.remaining, removed_members, combination)
