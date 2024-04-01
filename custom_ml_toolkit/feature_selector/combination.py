@@ -1,6 +1,7 @@
 import itertools
 from copy import copy, deepcopy
 from math import comb
+from tqdm import tqdm
 
 class ConbinatoricFeatureGenerator:
     def __init__(
@@ -10,6 +11,7 @@ class ConbinatoricFeatureGenerator:
         selected_cols: list,
         required_cols: list = None,
         budget: int = -1
+        
     ):
         self._r_start = r_start
         self._r_end = r_end
@@ -66,7 +68,6 @@ class ConbinatoricFeatureGenerator:
         self._budget = budget
         self._remaining_budget = budget
 
-
     def _create_combinations(self):
         for r in self._cal_range:
             combinations = itertools.combinations(
@@ -112,33 +113,38 @@ class ConbinatoricFeatureGenerator:
 
     def __iter__(self):
         return self
+    
+    def __len__(self):
+        if self._budget > 0:
+            return self._remaining_budget 
+        else:
+            return self._remaining
+    
+r_start = 1
+r_end = 3
+required_cols = ['r_1', 'r_2', ['r_3', 'r_4']]
+selected_cols = ['e_1', 'e_2', ['e_3_1', 'e_3_2']]
+budget = 1
 
-if __name__ == '__main__':
-    r_start = 1
-    r_end = 3
-    required_cols = ['r_1', 'r_2', ['r_3', 'r_4']]
-    selected_cols = ['e_1', 'e_2', ['e_3_1', 'e_3_2']]
-    budget = 1
-    
-    cfg = ConbinatoricFeatureGenerator(
-        r_start=r_start,
-        r_end=r_end,
-        selected_cols=selected_cols,
-        required_cols=required_cols,
-        budget=budget
-    )
-    
-    print(cfg.number_of_cases)
-    
-    for removed_members, combination in cfg:
-        print(cfg.remaining, removed_members, combination)
-    
-    cfg.budget = 2
-    
-    for removed_members, combination in cfg:
-        print(cfg.remaining, removed_members, combination)
-    
-    cfg.budget = -1
-    
-    for removed_members, combination in cfg:
-        print(cfg.remaining, removed_members, combination)
+cfg = ConbinatoricFeatureGenerator(
+    r_start=r_start,
+    r_end=r_end,
+    selected_cols=selected_cols,
+    required_cols=required_cols,
+    budget=budget
+)
+
+print(cfg.number_of_cases)
+
+for removed_members, combination in cfg:
+    print(cfg.remaining, removed_members, combination)
+
+cfg.budget = 2
+
+for removed_members, combination in cfg:
+    print(cfg.remaining, removed_members, combination)
+
+cfg.budget = -1
+
+for removed_members, combination in tqdm(cfg):
+    print(cfg.remaining, removed_members, combination)
