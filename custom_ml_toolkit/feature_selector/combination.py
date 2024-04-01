@@ -1,7 +1,7 @@
 import itertools
-from copy import copy, deepcopy
+from copy import deepcopy
 from math import comb
-from tqdm import tqdm
+
 
 class ConbinatoricFeatureGenerator:
     def __init__(
@@ -11,7 +11,6 @@ class ConbinatoricFeatureGenerator:
         selected_cols: list,
         required_cols: list = None,
         budget: int = -1
-        
     ):
         self._r_start = r_start
         self._r_end = r_end
@@ -21,13 +20,14 @@ class ConbinatoricFeatureGenerator:
             self._required_cols = required_cols
         else:
             self._required_cols = list()
-        
+
         self._budget = budget
 
+        self._n = len(self._selected_cols)
         self._melted_required_cols = self.melt_list_of_list(required_cols)
         self._cal_range = self._create_cal_range()
         self._combinations = self._create_combinations()
-        self._remaining = self.number_of_cases
+        self._remaining = self.number_of_combinations
 
         self._remaining_budget = budget
 
@@ -40,7 +40,7 @@ class ConbinatoricFeatureGenerator:
             else:
                 result_list.append(member)
         return result_list
-    
+
     def _create_cal_range(self):
         if self._r_start <= self._r_end:
             cal_range = range(self._r_start, self._r_end + 1, 1)
@@ -49,24 +49,36 @@ class ConbinatoricFeatureGenerator:
         return cal_range
 
     @property
-    def number_of_cases(self):
+    def number_of_combinations(self):
         no_of_cases = 0
         for r in self._cal_range:
-            no_of_cases += comb(len(self._selected_cols), r)
+            no_of_cases += comb(self._n, r)
         return no_of_cases
-    
+
     @property
     def budget(self):
         return self._budget
 
     @property
+    def n(self):
+        return self._n
+
+    @property
     def remaining(self):
         return self._remaining
-    
+
     @budget.setter
-    def budget(self, budget):
+    def budget(self, budget: int):
         self._budget = budget
         self._remaining_budget = budget
+
+    def info(self):
+        print('---------------------------------------------------------------')
+        print(f'n: {self.n}')
+        for r in self._cal_range:
+            print(f'r = {r}: {comb(self.n , r)} combinations')
+        print(f'Remaining {self.remaining}/{self.number_of_combinations}')
+        print('---------------------------------------------------------------')
 
     def _create_combinations(self):
         for r in self._cal_range:
@@ -82,9 +94,8 @@ class ConbinatoricFeatureGenerator:
         for member in self._selected_cols:
             if member not in combination:
                 removed_members.append(member)
-                # print(member, combination)
         return removed_members
-    
+
     def __next__(self):
         try:
             if self._budget > 0:
@@ -95,7 +106,7 @@ class ConbinatoricFeatureGenerator:
             combination = next(self._combinations)
             removed_members = self._find_remove_members(combination)
             combination = self._melted_required_cols + list(combination)
-            combination = self.melt_list_of_list(combination) 
+            combination = self.melt_list_of_list(combination)
             combination = deepcopy(combination)
 
             self._remaining -= 1
@@ -103,49 +114,19 @@ class ConbinatoricFeatureGenerator:
                 self._remaining_budget -= 1
 
             return removed_members, combination
-        
+
         except StopIteration:
             if self._remaining > 0:
                 print(f'Run out of budget, but there is/are still {self._remaining} combination(s) left.')
             else:
-                print(f'Run out of combination')
+                print('Run out of combination')
             raise StopIteration()
 
     def __iter__(self):
         return self
-    
+
     def __len__(self):
         if self._budget > 0:
-            return self._remaining_budget 
+            return self._remaining_budget
         else:
             return self._remaining
-
-if __name__ == '__main__':
-    r_start = 1
-    r_end = 3
-    required_cols = ['r_1', 'r_2', ['r_3', 'r_4']]
-    selected_cols = ['e_1', 'e_2', ['e_3_1', 'e_3_2']]
-    budget = 1
-    
-    cfg = ConbinatoricFeatureGenerator(
-        r_start=r_start,
-        r_end=r_end,
-        selected_cols=selected_cols,
-        required_cols=required_cols,
-        budget=budget
-    )
-    
-    print(cfg.number_of_cases)
-    
-    for removed_members, combination in cfg:
-        print(cfg.remaining, removed_members, combination)
-    
-    cfg.budget = 2
-    
-    for removed_members, combination in cfg:
-        print(cfg.remaining, removed_members, combination)
-    
-    cfg.budget = -1
-    
-    for removed_members, combination in tqdm(cfg):
-        print(cfg.remaining, removed_members, combination)

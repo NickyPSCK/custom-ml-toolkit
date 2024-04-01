@@ -9,7 +9,7 @@ def plot_feature_importances(
     feature_importance,
     feature_names,
     top_n=None,
-    plot_paleto:bool=False,
+    plot_paleto: bool = False,
     figsize=(7, 7),
     paleto_figsize=(7, 7),
 ):
