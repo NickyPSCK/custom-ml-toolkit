@@ -2,6 +2,7 @@ import pandas as pd
 from sklearn.metrics import classification_report, roc_auc_score
 import seaborn as sns
 import matplotlib.pyplot as plt
+from typing import Dict, Tuple, Optional
 
 
 def process_eval_dict(
@@ -20,65 +21,19 @@ def process_eval_dict(
     return pivoted_eval_df
 
 
-def eval_performance(
-    y_train,
-    y_train_pred,
-    y_test,
-    y_test_pred,
-    y_holdout_a=None,
-    y_holdout_pred_a=None,
-    y_holdout_b=None,
-    y_holdout_pred_b=None,
-    y_holdout_c=None,
-    y_holdout_pred_c=None,
-    labels=None
+def classification_reports(
+    data: Dict[str, Tuple[int, int]],  # Set Name: (y_true, y_pred)
+    labels: list = None,
+    digits: int = 4
 ):
-    print('--------------- Train Set Performance ---------------')
-    print(
-        classification_report(
-            y_true=y_train,
-            y_pred=y_train_pred,
-            labels=labels,
-            digits=4
-        )
-    )
-    print('---------------  Test Set Performance ---------------')
-    print(
-        classification_report(
-            y_true=y_test,
-            y_pred=y_test_pred,
-            labels=labels,
-            digits=4
-        )
-    )
-    if (y_holdout_a is not None) and (y_holdout_pred_a is not None):
-        print('---------------  Hold Out Set A Performance ---------------')
+    for set_name in data:
+        print(f'--------------- {set_name} Performance ---------------')
         print(
             classification_report(
-                y_true=y_holdout_a,
-                y_pred=y_holdout_pred_a,
+                y_true=data[set_name][0],
+                y_pred=data[set_name][1],
                 labels=labels,
-                digits=4
-            )
-        )
-    if (y_holdout_b is not None) and (y_holdout_pred_b is not None):
-        print('---------------  Hold Out Set B Performance ---------------')
-        print(
-            classification_report(
-                y_true=y_holdout_b,
-                y_pred=y_holdout_pred_b,
-                labels=labels,
-                digits=4
-            )
-        )
-    if (y_holdout_c is not None) and (y_holdout_pred_c is not None):
-        print('---------------  Hold Out Set C Performance ---------------')
-        print(
-            classification_report(
-                y_true=y_holdout_c,
-                y_pred=y_holdout_pred_c,
-                labels=labels,
-                digits=4
+                digits=digits
             )
         )
 
@@ -103,18 +58,20 @@ def plot_confusion_matrix(y_true, y_pred):
     )
 
 
-def create_lift_data(
-    y_true: list, 
-    y_score: list, 
-    bin_size:int = None,
-    q:int = None
+def create_gain_and_lift_data(
+    y_true: list,
+    y_score: list,
+    bin_size: int = None,
+    q: int = None
 ):
     if (bin_size is None) and (q is None):
-        ValueError('Either bin_size or q must be spacified.')
+        raise ValueError('Either bin_size or q must be spacified.')
     elif (bin_size is not None) and (q is not None):
-        ValueError('Cannot spacify both bin_siza or q at the same time.')
+        raise ValueError('Cannot spacify both bin_siza or q at the same time.')
+    else:
+        pass
 
-    lift_raw_data_df = pd.DataFrame({
+    gain_and_lift_raw_df = pd.DataFrame({
         'y_true': y_true.to_list(),
         'y_score': list(y_score)
     })\
@@ -123,65 +80,215 @@ def create_lift_data(
         .reset_index(drop=False)
 
     if q is not None:
-        lift_raw_data_df['bin'] = pd.qcut(lift_raw_data_df['index'], q=q, labels=False) + 1
+        gain_and_lift_raw_df['bin'] = pd.qcut(
+            gain_and_lift_raw_df['index'],
+            q=q,
+            labels=False
+        ) + 1
     else:
-        lift_raw_data_df['bin'] = ((lift_raw_data_df['index'] // bin_size) + 1) * bin_size
+        gain_and_lift_raw_df['bin'] = (
+            (
+                gain_and_lift_raw_df['index']
+                // bin_size
+            ) + 1
+        ) * bin_size
 
-    lift_curve_df = (
-        100 * (lift_raw_data_df.groupby('bin')['y_true'].sum() 
-        / lift_raw_data_df.groupby('bin')['y_true'].count())
-    ).reset_index()
-    return lift_raw_data_df, lift_curve_df
+    gain_and_lift_raw_df = gain_and_lift_raw_df.drop(
+        columns='index'
+    )
+
+    gain_and_lift_curve_df = gain_and_lift_raw_df\
+        .groupby('bin')\
+        .agg({
+            'y_score': ['max', 'min'],
+            'y_true': ['sum', 'count']
+        })
+    gain_and_lift_curve_df.columns = [
+        'score_max',
+        'score_min',
+        'converted_event',
+        'total_event'
+    ]
+    gain_and_lift_curve_df = gain_and_lift_curve_df.reset_index(drop=False)
+    gain_and_lift_curve_df['%_converted'] = (
+        100
+        * gain_and_lift_curve_df['converted_event']
+        / gain_and_lift_curve_df['total_event']
+    )
+    gain_and_lift_curve_df['%_cum_converted'] = (
+        100
+        * gain_and_lift_curve_df['converted_event'].cumsum()
+        / gain_and_lift_curve_df['converted_event'].sum()
+    )
+
+    return gain_and_lift_raw_df, gain_and_lift_curve_df
+
 
 def plot_lift_curve(
-    data: dict,
+    data: Dict[str, Tuple[int, int]],  # Line Name: (y_true, y_score)
     bin_size: int = None,
     q: int = None,
-    baseline: float = None,
+    baseline: Optional[float] = 50,  # %
+    lift: bool = False,
     title: str = 'Lift Chart',
-    xlim: tuple = None,
-    ylim: tuple = None,
-    figsize: tuple = (10, 4)
+    xlim: Optional[Tuple[int, int]] = None,
+    ylim: Optional[Tuple[int, int]] = None,
+    figsize: Tuple[int, int] = (10, 4)
 ):
-    fig, ax = plt.subplots(figsize=figsize)
+    _, ax = plt.subplots(figsize=figsize)
 
     legend_list = list()
     raw_dict = dict()
-    
+
     for pair_name in data:
-        y_true=data[pair_name][0]
-        y_score=data[pair_name][1]
-        lift_raw_data_df, lift_curve_df = create_lift_data(
-            y_true=y_true, 
-            y_score=y_score, 
-            bin_size=bin_size, 
+        y_true = data[pair_name][0]
+        y_score = data[pair_name][1]
+        lift_raw_data_df, lift_curve_df = create_gain_and_lift_data(
+            y_true=y_true,
+            y_score=y_score,
+            bin_size=bin_size,
             q=q
         )
-        gini_score = 2 * roc_auc_score(y_true=y_true, y_score=y_score) - 1
+        gini_score = (
+            2
+            * roc_auc_score(
+                y_true=y_true,
+                y_score=y_score
+            )
+            - 1)
         legend_list.append(f'{pair_name}, GINI {gini_score:.4f}')
-        ax.plot(lift_curve_df['bin'], lift_curve_df['y_true'], 'o', linestyle='-')
+        if lift:
+            ax.plot(
+                lift_curve_df['bin'],
+                lift_curve_df['%_converted'] / baseline,
+                'o',
+                linestyle='-'
+            )
+        else:
+            ax.plot(
+                lift_curve_df['bin'],
+                lift_curve_df['%_converted'],
+                'o',
+                linestyle='-'
+            )
         raw_dict[pair_name] = {
             'raw_data': lift_raw_data_df,
             'curve_data': lift_curve_df
         }
-            
+
     if baseline is not None:
+        if lift:
+            baseline = 1
+            legend_list.append(f'Baseline: {baseline}')
+        else:
+            legend_list.append(f'Baseline: {baseline}%')
+
         ax.axhline(
-            y=baseline, 
-            color='r', 
-            linestyle='-'
-        ) 
-        legend_list.append(f'Baseline: {baseline}')
+            y=baseline,
+            color='r',
+            linestyle='--'
+        )
 
     ax.legend(legend_list)
     ax.tick_params(axis='x', labelrotation=0)
     plt.title(title)
     plt.xlabel('Bucket')
-    plt.ylabel('%Target')
-    plt.grid(visible=True, which='major', axis='both')
+    if lift:
+        plt.ylabel('Lift')
+    else:
+        plt.ylabel('% of Conversion')
+    plt.grid(
+        visible=True,
+        which='both',
+        axis='both'
+    )
     if xlim is not None:
         plt.xlim(*xlim)
-    if ylim is not None:        
+    if ylim is not None:
         plt.ylim(*ylim)
+    plt.show()
+    return raw_dict
+
+
+def plot_gain_curve(
+    data: Dict[str, Tuple[int, int]],  # Line Name: (y_true, y_score)
+    q: int = 10,
+    bin_size: int = None,
+    title: str = 'Gain Chart',
+    slim_fit: bool = False,
+    xlim: Optional[Tuple[int, int]] = None,
+    ylim: Optional[Tuple[int, int]] = None,
+    figsize: Tuple[int, int] = (10, 4)
+):
+    _, ax = plt.subplots(figsize=figsize)
+
+    legend_list = list()
+    raw_dict = dict()
+
+    max_x = 0
+    for pair_name in data:
+        y_true = data[pair_name][0]
+        y_score = data[pair_name][1]
+        lift_raw_data_df, lift_curve_df = create_gain_and_lift_data(
+            y_true=y_true,
+            y_score=y_score,
+            bin_size=bin_size,
+            q=q
+        )
+        gini_score = (
+            2
+            * roc_auc_score(
+                y_true=y_true,
+                y_score=y_score
+            )
+            - 1)
+        legend_list.append(f'{pair_name}, GINI {gini_score:.4f}')
+
+        X = [0] + lift_curve_df['bin'].to_list()
+        y = [0] + lift_curve_df['%_cum_converted'].to_list()
+
+        ax.plot(X, y, 'o', linestyle='-')
+        raw_dict[pair_name] = {
+            'raw_data': lift_raw_data_df,
+            'curve_data': lift_curve_df
+        }
+        local_max_x = lift_curve_df['bin'].max()
+
+        if q is None:
+            ax.plot(
+                [0, local_max_x],
+                [0, 100],
+                color='r',
+                linestyle='--'
+            )
+            legend_list.append(f'Baseline {pair_name}')
+
+        if max_x < local_max_x:
+            max_x = local_max_x
+
+    if q is not None:
+        ax.plot([0, max_x], [0, 100], color='r', linestyle='--')
+        legend_list.append('Baseline')
+
+    ax.legend(legend_list)
+    ax.tick_params(axis='x', labelrotation=0)
+    plt.title(title)
+    plt.xlabel('Bucket')
+    plt.ylabel('% of Cumulative Conversion')
+    plt.grid(
+        visible=True,
+        which='both',
+        axis='both'
+    )
+
+    if slim_fit:
+        plt.xlim(0, max_x)
+        plt.ylim(0, 100)
+    else:
+        if xlim is not None:
+            plt.xlim(*xlim)
+        if ylim is not None:
+            plt.ylim(*ylim)
+
     plt.show()
     return raw_dict
