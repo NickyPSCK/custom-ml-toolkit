@@ -22,6 +22,25 @@ class ClusterProfiler:
             self._categorical_cols = categorical_cols
 
     @staticmethod
+    def _profile_cluster(
+        df: pd.DataFrame,
+        cluster_col: str
+    ):
+
+        result_df = df.groupby(cluster_col)[[cluster_col]]\
+            .count()\
+            .rename(columns={cluster_col: 'n'})
+        result_df['percent'] = 100 * result_df['n'] / result_df['n'].sum()
+        result_df = result_df.T
+        result_df['feature_name'] = '_cluster_stat_'
+        result_df.columns.name = 'cluster'
+        result_df.index.name = 'feature_values'
+        result_df = result_df.reset_index(drop=False)
+        result_df = result_df.set_index(['feature_name', 'feature_values'])
+        
+        return result_df
+
+    @staticmethod
     def _profile_cat_feature(
         df: pd.DataFrame,
         cluster_col: str,
@@ -44,32 +63,26 @@ class ClusterProfiler:
         result_df['feature_name'] = target_col
         result_df = result_df.set_index(['feature_name', 'feature_values'])
         result_df = 100 * result_df / result_df.sum(axis=0)
+        result_df.columns.name = 'cluster'
 
         return result_df
-
+    
     @staticmethod
-    def _profile_num_feature(
+    def _profile_num_features(
         df: pd.DataFrame,
         cluster_col: str,
-        target_col: str,
+        target_cols: list,
         agg: list = None
     ):
         if agg is None:
-            agg = ['mean', 'median', 'std']
+            agg = ['max', 'min', 'mean', 'median', 'std']
 
         result_df = df\
-            .groupby([cluster_col])[[target_col]]\
-            .agg(agg)
-
-        result_df.columns = [col_name[1] if col_name[1] != '' else col_name[0] for col_name in result_df.columns]
-
-        result_df = result_df\
-            .T\
-            .reset_index(drop=False)\
-            .rename(columns={'index': 'feature_values'})
-        result_df['feature_name'] = target_col
-        result_df.columns.name = ''
-        result_df = result_df.set_index(['feature_name', 'feature_values'])
+            .groupby([cluster_col])[target_cols]\
+            .agg(agg)\
+            .T
+        result_df.index.names = ['feature_name', 'feature_values']
+        result_df.columns.name = 'cluster'
 
         return result_df
 
@@ -80,14 +93,19 @@ class ClusterProfiler:
     ):
         profiles = list()
 
-        for num_col in self._numerical_cols:
-            profile = self._profile_num_feature(
-                df=df,
-                cluster_col=self._cluster_col,
-                target_col=num_col,
-                agg=num_agg
-            )
-            profiles.append(profile)
+        profile = self._profile_cluster(
+            df=df,
+            cluster_col=self._cluster_col
+        )
+        profiles.append(profile)
+
+        profile = self._profile_num_features(
+            df=df,
+            cluster_col=self._cluster_col,
+            target_cols=self._numerical_cols,
+            agg=num_agg
+        )
+        profiles.append(profile)
 
         for cat_col in self._categorical_cols:
             profile = self._profile_cat_feature(
@@ -98,4 +116,3 @@ class ClusterProfiler:
             profiles.append(profile)
 
         return pd.concat(profiles, axis=0)
-
