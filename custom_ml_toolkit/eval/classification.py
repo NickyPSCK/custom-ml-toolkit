@@ -7,7 +7,7 @@ from typing import Dict, Tuple, Optional
 
 def process_eval_dict(
     eval_dict: dict,
-    augmented_cols: dict
+    augmented_cols: Optional[dict] = None
 ) -> pd.DataFrame:
     eval_df = pd.DataFrame(eval_dict).reset_index()
     pivot_values = eval_df.columns
@@ -16,8 +16,9 @@ def process_eval_dict(
     pivoted_eval_df = pivoted_eval_df.drop(['index'], axis=1)
     pivoted_eval_df = pivoted_eval_df.reset_index(drop=True)
     pivoted_eval_df.columns = ['_'.join(col) for col in pivoted_eval_df.columns]
-    for col_name in augmented_cols:
-        pivoted_eval_df[col_name] = augmented_cols[col_name]
+    if augmented_cols is not None:
+        for col_name in augmented_cols:
+            pivoted_eval_df[col_name] = augmented_cols[col_name]
     return pivoted_eval_df
 
 
