@@ -3,7 +3,7 @@ from copy import deepcopy
 from math import comb
 
 
-class ConbinatoricFeatureGenerator:
+class CombinatoricFeatureGenerator:
     def __init__(
         self,
         r_start: int,
@@ -27,7 +27,8 @@ class ConbinatoricFeatureGenerator:
         self._melted_required_cols = self.melt_list_of_list(required_cols)
         self._cal_range = self._create_cal_range()
         self._combinations = self._create_combinations()
-        self._remaining = self.number_of_combinations
+        self._number_of_combinations = self._cal_number_of_combinations()
+        self._remaining = self._number_of_combinations
 
         self._remaining_budget = budget
 
@@ -36,7 +37,7 @@ class ConbinatoricFeatureGenerator:
         result_list = list()
         for member in list_of_list:
             if isinstance(member, list):
-                result_list += ConbinatoricFeatureGenerator.melt_list_of_list(member)
+                result_list += CombinatoricFeatureGenerator.melt_list_of_list(member)
             else:
                 result_list.append(member)
         return result_list
@@ -48,12 +49,15 @@ class ConbinatoricFeatureGenerator:
             cal_range = range(self._r_start, self._r_end - 1, -1)
         return cal_range
 
-    @property
-    def number_of_combinations(self):
+    def _cal_number_of_combinations(self):
         no_of_cases = 0
         for r in self._cal_range:
             no_of_cases += comb(self._n, r)
         return no_of_cases
+
+    @property
+    def number_of_combinations(self):
+        return self._number_of_combinations
 
     @property
     def budget(self):
