@@ -11,6 +11,7 @@ def melt_list_of_list(list_of_list):
             result_list.append(member)
     return result_list
 
+
 def split_cal_and_num(
     col_names: list,
     all_cat_cols: list,
@@ -24,6 +25,7 @@ def split_cal_and_num(
         elif col_name in all_num_cols:
             num_columns.append(col_name)
     return num_columns, cat_columns
+
 
 def split_feature_category(
     col_names: list,

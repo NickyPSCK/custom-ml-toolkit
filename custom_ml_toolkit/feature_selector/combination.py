@@ -10,7 +10,8 @@ class CombinatoricFeatureGenerator:
         r_end: int,
         selected_cols: list,
         required_cols: list = None,
-        budget: int = -1
+        budget: int = -1,
+        verbose: bool = True
     ):
         self._r_start = r_start
         self._r_end = r_end
@@ -22,6 +23,7 @@ class CombinatoricFeatureGenerator:
             self._required_cols = list()
 
         self._budget = budget
+        self._verbose = verbose
 
         self._n = len(self._selected_cols)
         self._melted_required_cols = self.melt_list_of_list(required_cols)
@@ -120,10 +122,11 @@ class CombinatoricFeatureGenerator:
             return removed_members, combination
 
         except StopIteration:
-            if self._remaining > 0:
-                print(f'Run out of budget, but there is/are still {self._remaining} combination(s) left.')
-            else:
-                print('Run out of combination')
+            if self._verbose:
+                if self._remaining > 0:
+                    print(f'Run out of budget, but there is/are still {self._remaining} combination(s) left.')
+                else:
+                    print('Run out of combination')
             raise StopIteration()
 
     def __iter__(self):

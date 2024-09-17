@@ -37,7 +37,7 @@ class ClusterProfiler:
         result_df.index.name = 'feature_values'
         result_df = result_df.reset_index(drop=False)
         result_df = result_df.set_index(['feature_name', 'feature_values'])
-        
+
         return result_df
 
     @staticmethod
@@ -66,7 +66,7 @@ class ClusterProfiler:
         result_df.columns.name = 'cluster'
 
         return result_df
-    
+
     @staticmethod
     def _profile_num_features(
         df: pd.DataFrame,
