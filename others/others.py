@@ -8,7 +8,7 @@ import numpy as np
 
 
 
-def create_bin(series, bins):
+def create_bin(series, bins) -> pd.Series:
     bin_labels = list()
     for i, nbin in enumerate(bins):
         prefix = str(i).rjust(3, '0')
@@ -26,7 +26,7 @@ def create_bin(series, bins):
     )
 
 
-def make_ordinal(n):
+def make_ordinal(n) -> str:
     '''
     Convert an integer into its ordinal representation::
 
@@ -43,12 +43,12 @@ def make_ordinal(n):
     return str(n) + suffix
 
 
-def check_nid(nid: str):
+def check_thai_national_id(nid: str) -> bool:
     if not nid.isdigit():
         return False
 
     # ถ้า nid ไม่ใช่ 13 ให้คืนค่า False
-    if(len(nid) != 13):
+    if (len(nid) != 13):
         return False
 
     # บุคคลมี 9 ประเภท 0-8
@@ -66,9 +66,9 @@ def check_nid(nid: str):
 
     # ผลลัพธ์
     check_sum = 0
-    while num<12:
+    while num < 12:
         # นำค่า num เป็น  index list แต่ละตัว *  (num2 - num) แล้วรวมเข้ากับ check_sum
-        check_sum += int(listdata[num])*(num2-num)
+        check_sum += int(listdata[num]) * (num2-num)
         # เพิ่มค่า num อีก 1
         num += 1
 
