@@ -3,7 +3,7 @@ from typing import List, Dict, Tuple, Optional
 import pandas as pd
 
 
-class DataFrameValidator:
+class DataFrameFormatter:
     def __init__(
         self,
         required_cols: Optional[list] = None,
@@ -14,10 +14,9 @@ class DataFrameValidator:
         dt_col_formats: Optional[Dict[str, str]] = None,
         literal_col_values: Optional[Dict[str, List[str]]] = None,
         non_nullable_cols: Optional[list] = None,
-        # col_min_max_constrains: Optional[dict] = None,
-        # col_func_constrain: Optional[dict] = None,
-
+        distinct_keys: Optional[list] = None
     ):
+        # Add distinct keys
         self._required_cols = list(set(self._defalut(required_cols, list)))
         self._dtype_col_dict = {
             'bool': list(set(self._defalut(bool_cols, list))),
@@ -28,6 +27,9 @@ class DataFrameValidator:
             'literal': self._defalut(literal_col_values, dict)
         }
         self._check_duplicate_dtypes()
+
+        self._distinct_keys = list(set(self._defalut(distinct_keys, list)))
+
         self._non_nullable_cols = self._create_non_nullable_cols(
             non_nullable_cols=non_nullable_cols
         )
@@ -37,9 +39,10 @@ class DataFrameValidator:
         non_nullable_cols: list
     ) -> list:
         non_nullable_cols = list(set(non_nullable_cols))
-        non_nullable_by_dtype_cols = (
+        non_nullable_by_dtype_cols = set(
             self._dtype_col_dict['bool']
             + self._dtype_col_dict['int']
+            + self._distinct_keys
         )
         missing_non_nullable_cols = list()
         for col in non_nullable_by_dtype_cols:
@@ -48,7 +51,7 @@ class DataFrameValidator:
 
         non_nullable_cols += missing_non_nullable_cols
 
-        print(f'Warning: boolean and int columns: {missing_non_nullable_cols} have been added to non nullable columns.')
+        print(f'Warning: boolean, int and distinct key columns: {missing_non_nullable_cols} have been added to non nullable columns.')
         return non_nullable_cols
 
     def _check_duplicate_dtypes(self) -> None:
@@ -63,16 +66,21 @@ class DataFrameValidator:
             )
 
     @staticmethod
-    def _defalut(v: object, o: object):
-        if v is None:
-            return o()
+    def _defalut(
+        input: object,
+        default_object: object
+    ) -> object:
+        if input is None:
+            return default_object()
         else:
-            return v
+            if not isinstance(input, default_object):
+                raise TypeError('Invalid input type')
+            return input
 
     @staticmethod
     def check_bool(
         series: pd.Series,
-    ):
+    ) -> Tuple[bool, pd.Series, bool, List[str]]:
         # Untill this become non-experiment
         # https://pandas.pydata.org/docs/user_guide/boolean.html
         formatted_series = series.copy()
@@ -83,15 +91,17 @@ class DataFrameValidator:
             )
             error = False
             series = formatted_series
+            is_formatted = True
         except ValueError:
             error = True
             error_descs.append('Error: Invalid boolean value(s).')
-        return series, error, error_descs
+            is_formatted = False
+        return is_formatted, series, error, error_descs
 
     @staticmethod
     def check_int(
         series: pd.Series,
-    ):
+    ) -> Tuple[bool, pd.Series, bool, List[str]]:
         # Untill this become non-experiment
         # https://pandas.pydata.org/docs/user_guide/integer_na.html
         formatted_series = series.copy()
@@ -109,15 +119,17 @@ class DataFrameValidator:
             else:
                 error = False
             series = formatted_series
+            is_formatted = True
         except ValueError:
             error = True
             error_descs.append('Error: Invalid integer value(s).')
-        return series, error, error_descs
+            is_formatted = False
+        return is_formatted, series, error, error_descs
 
     @staticmethod
     def check_float(
         series: pd.Series
-    ):
+    ) -> Tuple[bool, pd.Series, bool, List[str]]:
         formatted_series = series.copy()
         error_descs = list()
         try:
@@ -127,15 +139,17 @@ class DataFrameValidator:
             )
             error = False
             series = formatted_series
+            is_formatted = True
         except ValueError:
             error = True
             error_descs.append('Error: Invalid float value(s).')
-        return series, error, error_descs
+            is_formatted = False
+        return is_formatted, series, error, error_descs
 
     @staticmethod
     def check_str(
         series: pd.Series,
-    ):
+    ) -> Tuple[bool, pd.Series, bool, List[str]]:
         formatted_series = series.copy()
         error_descs = list()
         try:
@@ -143,19 +157,21 @@ class DataFrameValidator:
             formatted_series = formatted_series.astype(
                 dtype=str, copy=True, errors='raise'
             )
-            formatted_series[null_index] = ''
+            formatted_series[null_index] = None
             error = False
             series = formatted_series
+            is_formatted = True
         except ValueError:
             error = True
             error_descs.append('Error: Invalid string value(s).')
-        return series, error, error_descs
+            is_formatted = False
+        return is_formatted, series, error, error_descs
 
     @staticmethod
     def check_dt(
         series: pd.Series,
         format: str
-    ):
+    ) -> Tuple[bool, pd.Series, bool, List[str]]:
         formatted_series = series.copy()
         error_descs = list()
         try:
@@ -165,16 +181,18 @@ class DataFrameValidator:
             )
             error = False
             series = formatted_series
+            is_formatted = True
         except ValueError:
             error = True
             error_descs.append(f'Error: Invalid datetime format ({format}).')
-        return series, error, error_descs
+            is_formatted = False
+        return is_formatted, series, error, error_descs
 
     @staticmethod
     def check_literal(
         series: pd.Series,
         literals: List[str]
-    ):
+    ) -> Tuple[bool, pd.Series, bool, List[str]]:
         formatted_series = series.copy()
         error_descs = list()
         try:
@@ -189,18 +207,21 @@ class DataFrameValidator:
 
             error = False
             series = formatted_series
+            is_formatted = True
         except ValueError:
             error = True
             error_descs.append(f'Error: Invalid literal value(s) {literals}.')
+            is_formatted = False
         except AssertionError:
             error = True
             error_descs.append(f'Error: Invalid literal value(s) {literals}.')
-        return series, error, error_descs
+            is_formatted = False
+        return is_formatted, series, error, error_descs
 
     def _check_missing_required_cols(
         self,
         columns: list
-    ):
+    ) -> Tuple[List[str], List[str], List[str]]:
         target_cols = set(columns)
         required_cols = set(self._required_cols)
         missing_required_cols = list(required_cols.difference(target_cols))
@@ -208,6 +229,47 @@ class DataFrameValidator:
         not_required_cols = list(target_cols.difference(required_cols))
 
         return missing_required_cols, existing_required_cols, not_required_cols
+
+    def _check_types(
+        self,
+        df: pd.DataFrame,
+    ) -> Tuple[pd.DataFrame, dict, list, list]:
+        df = df.copy()
+        formatted_cols = list()
+        unformatted_cols = list()
+        type_errors = dict()
+        for type_name in self._dtype_col_dict:
+            for col in self._dtype_col_dict[type_name]:
+                if col in df.columns:
+
+                    if isinstance(self._dtype_col_dict[type_name], dict):
+                        # 'dt', 'literal'
+                        is_formatted, df[col], error, error_descs = getattr(
+                            self,
+                            f'check_{type_name}'
+                        )(df[col], self._dtype_col_dict[type_name][col])
+                    elif isinstance(self._dtype_col_dict[type_name], list):
+                        # 'bool', 'int', 'float', 'str'
+                        is_formatted, df[col], error, error_descs = getattr(
+                            self,
+                            f'check_{type_name}'
+                        )(df[col])
+                    else:
+                        # Add Proper Error
+                        raise ValueError('Input error')
+
+                    if is_formatted:
+                        formatted_cols.append(col)
+                    else:
+                        unformatted_cols.append(col)
+
+                    if error:
+                        for error in error_descs:
+                            if error in type_errors:
+                                type_errors[error].append(col)
+                            else:
+                                type_errors[error] = [col]
+        return df, type_errors, formatted_cols, unformatted_cols
 
     def _check_null_values(
         self,
@@ -224,55 +286,41 @@ class DataFrameValidator:
         ]
         return null_in_non_nullable_cols
 
-    def _check_types(
+    def _check_distinct_keys(
         self,
         df: pd.DataFrame,
-        formatted: bool = False,
-    ) -> Tuple[pd.DataFrame, dict]:
+        null_in_non_nullable_cols: list,
+    ) -> bool:
         df = df.copy()
-        type_errors = dict()
-        for type_name in self._dtype_col_dict:
+        null_disticnt_keys = list()
+        for col in self._distinct_keys:
+            if col in null_in_non_nullable_cols:
+                null_disticnt_keys.append(col)
+        try:
+            assert len(null_disticnt_keys) == 0
+            assert df[self._distinct_keys].drop_duplicates().shape[0] == df.shape[0]
+            valid_distinct_keys = False
+        except AssertionError:
+            valid_distinct_keys = True
+        return valid_distinct_keys
 
-            for col in self._dtype_col_dict[type_name]:
-                if col in df.columns:
-
-                    if isinstance(self._dtype_col_dict[type_name], dict):
-                        series, error, error_descs = getattr(
-                            self,
-                            f'check_{type_name}'
-                        )(df[col], self._dtype_col_dict[type_name][col])
-                    else:
-                        series, error, error_descs = getattr(
-                            self,
-                            f'check_{type_name}'
-                        )(df[col])
-
-                    if formatted:
-                        df[col] = series
-
-                    if error:
-                        for error in error_descs:
-                            if error in type_errors:
-                                type_errors[error].append(col)
-                            else:
-                                type_errors[error] = [col]
-        return df, type_errors
-
-    def validate(
+    def format(
         self,
         df: pd.DataFrame,
-        formatted: bool = True,
-    ) -> Tuple[pd.DataFrame, dict]:
+    ) -> Tuple[pd.DataFrame, dict, list, list]:
         errors = dict()
 
         missing_req_cols, _, not_req_cols = self._check_missing_required_cols(
             columns=df.columns
         )
+
+        df, type_errors, type_formatted_cols, type_unformatted_cols = self._check_types(df=df)
+
         null_in_non_nullable_cols = self._check_null_values(df=df)
 
-        df, type_errors = self._check_types(
+        valid_distinct_keys = self._check_distinct_keys(
             df=df,
-            formatted=formatted
+            null_in_non_nullable_cols=null_in_non_nullable_cols
         )
 
         if len(missing_req_cols) > 0:
@@ -284,6 +332,9 @@ class DataFrameValidator:
         if len(null_in_non_nullable_cols) > 0:
             errors['Error: Have null value(s) in non nullable columns(s).'] = null_in_non_nullable_cols
 
+        if valid_distinct_keys:
+            errors['Error: Distinct keys are not valid.'] = self._distinct_keys
+
         errors.update(type_errors)
 
-        return df, errors
+        return df, errors, type_formatted_cols, type_unformatted_cols
