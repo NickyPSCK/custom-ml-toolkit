@@ -1,13 +1,24 @@
 import pandas as pd
+from typing import List, Optional, Any
 
 
 class ClusterProfiler:
+    '''Class to perform cluster profiling on a dataset, providing summaries for numerical and categorical features
+    within each cluster.
+    '''
     def __init__(
         self,
         cluster_col: str,
-        numerical_cols: list,
-        categorical_cols: list
-    ):
+        numerical_cols: List[str],
+        categorical_cols: List[str]
+    ) -> None:
+        '''Initializes the ClusterProfiler with the cluster column and lists of numerical and categorical columns.
+
+        Args:
+            cluster_col (str): The column name representing the cluster.
+            numerical_cols (List[str]): List of numerical column names.
+            categorical_cols (List[str]): List of categorical column names.
+        '''
 
         self._cluster_col = cluster_col
 
@@ -25,7 +36,16 @@ class ClusterProfiler:
     def _profile_cluster(
         df: pd.DataFrame,
         cluster_col: str
-    ):
+    ) -> pd.DataFrame:
+        '''Profiles the distribution of the cluster column by counting the occurrences and calculating percentages.
+
+        Args:
+            df (pd.DataFrame): The dataframe to profile.
+            cluster_col (str): The column name representing the cluster.
+
+        Returns:
+            pd.DataFrame: A dataframe containing cluster distribution statistics.
+        '''
 
         result_df = df.groupby(cluster_col)[[cluster_col]]\
             .count()\
@@ -45,7 +65,17 @@ class ClusterProfiler:
         df: pd.DataFrame,
         cluster_col: str,
         target_col: str
-    ):
+    ) -> pd.DataFrame:
+        '''Profiles a categorical feature by counting occurrences within each cluster and calculating percentages.
+
+        Args:
+            df (pd.DataFrame): The dataframe to profile.
+            cluster_col (str): The column name representing the cluster.
+            target_col (str): The column name representing the categorical feature.
+
+        Returns:
+            pd.DataFrame: A dataframe containing the counts and percentages of the categorical feature for each cluster.
+        '''
         result_df = df\
             .groupby([cluster_col, target_col])[[target_col]]\
             .count()\
@@ -71,9 +101,20 @@ class ClusterProfiler:
     def _profile_num_features(
         df: pd.DataFrame,
         cluster_col: str,
-        target_cols: list,
-        agg: list = None
-    ):
+        target_cols: List[Any],
+        agg: Optional[List[str]] = None
+    ) -> pd.DataFrame:
+        '''Profiles numerical features by calculating statistics (e.g., max, min, mean, median, std) within each cluster.
+
+        Args:
+            df (pd.DataFrame): The dataframe to profile.
+            cluster_col (str): The column name representing the cluster.
+            target_cols (List[Any]): The list of numerical column names to profile.
+            agg (Optional[List[str]]): The aggregation functions to apply (default is ['max', 'min', 'mean', 'median', 'std']).
+
+        Returns:
+            pd.DataFrame: A dataframe containing aggregated statistics for numerical features within each cluster.
+        '''
         if agg is None:
             agg = ['max', 'min', 'mean', 'median', 'std']
 
@@ -89,8 +130,17 @@ class ClusterProfiler:
     def summary(
         self,
         df: pd.DataFrame,
-        num_agg: list = None
-    ):
+        num_agg: Optional[List[str]] = None
+    ) -> pd.DataFrame:
+        '''Summarizes the profiling of clusters, including numerical and categorical features.
+
+        Args:
+            df (pd.DataFrame): The dataframe to summarize.
+            num_agg (Optional[List[str]]): The aggregation functions for numerical features (default is None, which uses 'max', 'min', 'mean', 'median', 'std').
+
+        Returns:
+            pd.DataFrame: A dataframe containing the profiling summary for clusters, numerical features, and categorical features.
+        '''
         profiles = list()
 
         profile = self._profile_cluster(

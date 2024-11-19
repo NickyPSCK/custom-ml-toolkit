@@ -1,12 +1,14 @@
+import warnings
 from collections import Counter
 from typing import Any, List, Dict, Tuple, Optional
 import pandas as pd
+from pandas.errors import ParserError
 
-pd.DataFrame()
 
 class DataFrameFormatter:
     '''Format the Pandas DataFrame as per specified format.
-    
+    Provides methods to enforce data types, check for missing required columns, validate
+    non-null constraints, and ensure uniqueness of composite keys in a DataFrame.
     '''
     def __init__(
         self,
@@ -20,22 +22,28 @@ class DataFrameFormatter:
         non_nullable_cols: Optional[list] = None,
         distinct_keys: Optional[list] = None
     ):
-        '''Pandas DataFrame Formatter
+        '''Initializes the DataFrameFormatter with specified formatting rules.
         Args:
-            required_cols (:obj:`list`, optional): Description of `param1`.
-            bool_cols (:obj:`list`, optional): A list of column name to be formatted as boolean type. 
-            int_cols (:obj:`list`, optional): A list of column name to be formatted as integer type.
-            float_cols (:obj:`list`, optional): A list of column name to be formatted as floating point type.
-            str_cols (:obj:`list`, optional): A list of column name to be formatted as string type
-            dt_col_formats (:obj:`dict`, optional): A dictionary where the keys are 
-                column names to be formatted as datetime type
-                and the values are the format to parse datetime.
-                See strftime documentation for more information on choices:
-                https://docs.python.org/3/library/datetime.html#strftime-and-strptime-behavior
-
+            required_cols (list, optional): Description of param1.
+            bool_cols (list, optional): A list of column name to be formatted as boolean type.
+            int_cols (list, optional): A list of column name to be formatted as integer type.
+            float_cols (list, optional): A list of column name to be formatted as floating point type.
+            str_cols (list, optional): A list of column name to be formatted as string type
+            dt_col_formats (dict, optional): A dictionary where keys are column names to be
+                formatted as datetime type, and values are the format strings used to parse these columns.
+                Refer to Python's strftime documentation for supported formats:
+                https://docs.python.org/3/library/datetime.html#strftime-and-strptime-behavior.
+            literal_col_values (dict, optional): A dictionary where keys are column names and
+                values are lists of valid literal strings for those columns. Used to validate that
+                values in the specified columns match the provided list.
+            non_nullable_cols (list, optional): A list of column names that must not contain
+                null values. Validation will fail if nulls are detected in these columns.
+            distinct_keys (list, optional): A list of column names that together form a
+                composite key. Validation ensures the combination of these columns has unique
+                values across the DataFrame, enforcing the uniqueness of the composite key.
         '''
-        # Add distinct keys
-        self._required_cols = list(set(self._defalut(required_cols, list)))
+
+        self._required_cols = list(set(self._default(required_cols, list)))
         self._dtype_col_dict = self._create_dtype_col_dict(
             bool_cols=bool_cols,
             int_cols=int_cols,
@@ -45,7 +53,7 @@ class DataFrameFormatter:
             literal_col_values=literal_col_values
         )
         self._check_duplicate_dtypes()
-        self._distinct_keys = list(set(self._defalut(distinct_keys, list)))
+        self._distinct_keys = list(set(self._default(distinct_keys, list)))
         self._non_nullable_cols = self._create_non_nullable_cols(
             non_nullable_cols=non_nullable_cols
         )
@@ -58,17 +66,35 @@ class DataFrameFormatter:
             str_cols: Optional[list] = None,
             dt_col_formats: Optional[Dict[str, str]] = None,
             literal_col_values: Optional[Dict[str, List[str]]] = None
-    ) -> None:
+    ) -> dict:
+        '''Creates a dictionary mapping data types to their associated column lists.
+
+        Args:
+            bool_cols (list, optional): Columns to format as boolean.
+            int_cols (list, optional): Columns to format as integer.
+            float_cols (list, optional): Columns to format as float.
+            str_cols (list, optional): Columns to format as string.
+            dt_col_formats (dict, optional): Datetime columns with their formats.
+            literal_col_values (dict, optional): Literal columns with valid values.
+
+        Returns:
+            dict: A dictionary mapping data types to their respective columns or formats.
+        '''
         return {
-            'bool': list(set(self._defalut(bool_cols, list))),
-            'int': list(set(self._defalut(int_cols, list))),
-            'float': list(set(self._defalut(float_cols, list))),
-            'str': list(set(self._defalut(str_cols, list))),
-            'dt': self._defalut(dt_col_formats, dict),
-            'literal': self._defalut(literal_col_values, dict)
+            'bool': list(set(self._default(bool_cols, list))),
+            'int': list(set(self._default(int_cols, list))),
+            'float': list(set(self._default(float_cols, list))),
+            'str': list(set(self._default(str_cols, list))),
+            'dt': self._default(dt_col_formats, dict),
+            'literal': self._default(literal_col_values, dict)
         }
 
     def _check_duplicate_dtypes(self) -> None:
+        '''Validates that no column is assigned to more than one data type.
+
+        Raises:
+            ValueError: If duplicate columns exist in multiple data types.
+        '''
         cols = list()
         for dtype in self._dtype_col_dict:
             cols += list(self._dtype_col_dict[dtype])
@@ -83,6 +109,17 @@ class DataFrameFormatter:
         self,
         non_nullable_cols: list
     ) -> list:
+        '''Creates the final list of non-nullable columns by merging specified and inferred columns.
+
+        Args:
+            non_nullable_cols (list): Initial list of non-nullable columns.
+
+        Returns:
+            list: Updated list of non-nullable columns, including inferred columns.
+
+        Prints:
+            Warning: Columns inferred from bool, int, and distinct_keys are added.
+        '''
         non_nullable_cols = list(set(non_nullable_cols))
         non_nullable_by_dtype_cols = set(
             self._dtype_col_dict['bool']
@@ -96,25 +133,52 @@ class DataFrameFormatter:
 
         non_nullable_cols += missing_non_nullable_cols
 
-        print(f'Warning: boolean, int and distinct key columns: {missing_non_nullable_cols} have been added to non nullable columns.')
+        warnings.warn(
+            f"Warning: boolean, int, and distinct key columns: {missing_non_nullable_cols} "
+            "have been added to non-nullable columns.",
+            UserWarning,
+        )
         return non_nullable_cols
 
     @staticmethod
-    def _defalut(
+    def _default(
         input: object,
         default_object: object
     ) -> object:
+        '''Ensures a default object is returned if input is None, and validates its type.
+
+        Args:
+            input (object): Input value.
+            default_object (object): Expected type or callable to create default.
+
+        Returns:
+            object: The input or a default object.
+
+        Raises:
+            TypeError: If input type is invalid.
+        '''
         if input is None:
             return default_object()
         else:
             if not isinstance(input, default_object):
-                raise TypeError('Invalid input type')
+                raise TypeError(
+                    f'Invalid input type. Expected {type(default_object).__name__}, '
+                    f'but got {type(input).__name__}.'
+                )
             return input
 
     @staticmethod
     def check_bool(
         series: pd.Series,
     ) -> Tuple[bool, pd.Series, bool, List[str]]:
+        '''Validates and formats a series as boolean.
+
+        Args:
+            series (pd.Series): Input series.
+
+        Returns:
+            tuple: (is_formatted, formatted_series, has_error, error_messages)
+        '''
         # Untill this become non-experiment
         # https://pandas.pydata.org/docs/user_guide/boolean.html
         formatted_series = series.copy()
@@ -128,7 +192,7 @@ class DataFrameFormatter:
             is_formatted = True
         except ValueError:
             error = True
-            error_descs.append('Error: Invalid boolean value(s).')
+            error_descs.append('Invalid data type (boolean).')
             is_formatted = False
         return is_formatted, series, error, error_descs
 
@@ -136,6 +200,14 @@ class DataFrameFormatter:
     def check_int(
         series: pd.Series,
     ) -> Tuple[bool, pd.Series, bool, List[str]]:
+        '''Validates and formats a series as integer.
+
+        Args:
+            series (pd.Series): Input series.
+
+        Returns:
+            tuple: (is_formatted, formatted_series, has_error, error_messages)
+        '''
         # Untill this become non-experiment
         # https://pandas.pydata.org/docs/user_guide/integer_na.html
         formatted_series = series.copy()
@@ -149,14 +221,14 @@ class DataFrameFormatter:
             )
             if series_float.sum() > formatted_series.sum():
                 error = True
-                error_descs.append('Warning: Loss of precision.')
+                error_descs.append('Loss of precision (integer).')
             else:
                 error = False
             series = formatted_series
             is_formatted = True
         except ValueError:
             error = True
-            error_descs.append('Error: Invalid integer value(s).')
+            error_descs.append('Invalid data type (integer).')
             is_formatted = False
         return is_formatted, series, error, error_descs
 
@@ -164,6 +236,14 @@ class DataFrameFormatter:
     def check_float(
         series: pd.Series
     ) -> Tuple[bool, pd.Series, bool, List[str]]:
+        '''Validates and formats a series as float.
+
+        Args:
+            series (pd.Series): Input series.
+
+        Returns:
+            tuple: (is_formatted, formatted_series, has_error, error_messages)
+        '''
         formatted_series = series.copy()
         error_descs = list()
         try:
@@ -176,7 +256,7 @@ class DataFrameFormatter:
             is_formatted = True
         except ValueError:
             error = True
-            error_descs.append('Error: Invalid float value(s).')
+            error_descs.append('Invalid data type (float).')
             is_formatted = False
         return is_formatted, series, error, error_descs
 
@@ -184,6 +264,14 @@ class DataFrameFormatter:
     def check_str(
         series: pd.Series,
     ) -> Tuple[bool, pd.Series, bool, List[str]]:
+        '''Validates and formats a series as string.
+
+        Args:
+            series (pd.Series): Input series.
+
+        Returns:
+            tuple: (is_formatted, formatted_series, has_error, error_messages)
+        '''
         formatted_series = series.copy()
         error_descs = list()
         try:
@@ -197,7 +285,7 @@ class DataFrameFormatter:
             is_formatted = True
         except ValueError:
             error = True
-            error_descs.append('Error: Invalid string value(s).')
+            error_descs.append('Invalid data type (string).')
             is_formatted = False
         return is_formatted, series, error, error_descs
 
@@ -206,6 +294,17 @@ class DataFrameFormatter:
         series: pd.Series,
         format: str
     ) -> Tuple[bool, pd.Series, bool, List[str]]:
+        '''Validates and formats a series as datetime using a specified format.
+
+        Args:
+            series (pd.Series): Input series.
+            format (str): Datetime format string.
+                Refer to Python's strftime documentation for supported formats:
+                https://docs.python.org/3/library/datetime.html#strftime-and-strptime-behavior.
+
+        Returns:
+            tuple: (is_formatted, formatted_series, has_error, error_messages)
+        '''
         formatted_series = series.copy()
         error_descs = list()
         try:
@@ -216,13 +315,9 @@ class DataFrameFormatter:
             error = False
             series = formatted_series
             is_formatted = True
-        # except ParserError:
-        #     error = True
-        #     error_descs.append(f'Error: Invalid datetime format ({format}).')
-        #     is_formatted = False
-        except ValueError:
+        except (ValueError, ParserError):
             error = True
-            error_descs.append(f'Error: Invalid datetime format ({format}).')
+            error_descs.append(f'Datetime formatting issues ({format}).')
             is_formatted = False
         return is_formatted, series, error, error_descs
 
@@ -231,6 +326,15 @@ class DataFrameFormatter:
         series: pd.Series,
         literals: List[str]
     ) -> Tuple[bool, pd.Series, bool, List[str]]:
+        '''Validates and formats a series against specified literal values.
+
+        Args:
+            series (pd.Series): Input series.
+            literals (list of str): Valid literal values.
+
+        Returns:
+            tuple: (is_formatted, formatted_series, has_error, error_messages)
+        '''
         formatted_series = series.copy()
         error_descs = list()
         try:
@@ -246,13 +350,9 @@ class DataFrameFormatter:
             error = False
             series = formatted_series
             is_formatted = True
-        except ValueError:
+        except (ValueError, AssertionError):
             error = True
-            error_descs.append(f'Error: Invalid literal value(s) {literals}.')
-            is_formatted = False
-        except AssertionError:
-            error = True
-            error_descs.append(f'Error: Invalid literal value(s) {literals}.')
+            error_descs.append(f'Invalid literal value {literals}.')
             is_formatted = False
         return is_formatted, series, error, error_descs
 
@@ -260,6 +360,14 @@ class DataFrameFormatter:
         self,
         columns: list
     ) -> Tuple[List[str], List[str], List[str]]:
+        '''Checks for missing required columns in the DataFrame.
+
+        Args:
+            columns (list): Columns present in the DataFrame.
+
+        Returns:
+            tuple: (missing_required_cols, existing_required_cols, not_required_cols)
+        '''
         target_cols = set(columns)
         required_cols = set(self._required_cols)
         missing_required_cols = list(required_cols.difference(target_cols))
@@ -272,6 +380,14 @@ class DataFrameFormatter:
         self,
         df: pd.DataFrame,
     ) -> Tuple[pd.DataFrame, dict, list, list]:
+        '''Validates and formats columns based on their specified data types.
+
+        Args:
+            df (pd.DataFrame): Input DataFrame.
+
+        Returns:
+            tuple: (formatted DataFrame, type_errors, formatted_cols, unformatted_cols)
+        '''
         df = df.copy()
         formatted_cols = list()
         unformatted_cols = list()
@@ -313,7 +429,14 @@ class DataFrameFormatter:
         self,
         df: pd.DataFrame
     ) -> list:
+        '''Checks for null values in non-nullable columns.
 
+        Args:
+            df (pd.DataFrame): Input DataFrame.
+
+        Returns:
+            list: Columns with null values in non-nullable columns.
+        '''
         count_null_values = df[self._non_nullable_cols]\
             .isna()\
             .sum(axis=0)\
@@ -329,6 +452,15 @@ class DataFrameFormatter:
         df: pd.DataFrame,
         null_in_non_nullable_cols: list,
     ) -> bool:
+        '''Validates the uniqueness of composite keys in the DataFrame.
+
+        Args:
+            df (pd.DataFrame): Input DataFrame.
+            null_in_non_nullable_cols (list): Columns with null values.
+
+        Returns:
+            bool: Whether the distinct keys are valid (True if invalid).
+        '''
         df = df.copy()
         null_disticnt_keys = list()
         for col in self._distinct_keys:
@@ -346,6 +478,27 @@ class DataFrameFormatter:
         self,
         df: pd.DataFrame,
     ) -> Tuple[pd.DataFrame, dict, list, list]:
+        '''Applies all validation and formatting rules to a DataFrame.
+
+        Args:
+            df (pd.DataFrame): Input DataFrame.
+
+        Returns:
+            tuple: (formatted DataFrame, errors, formatted_cols, unformatted_cols)
+
+            Posible "errors" keys:
+                - Missing required columns.
+                - Not required columns.
+                - Invalid data type (Boolean).
+                - Loss of precision (integer).
+                - Invalid data type (integer).
+                - Invalid data type (float).
+                - Invalid data type (string).
+                - Datetime formatting issues ({format}).
+                - Invalid literal value {literals}.
+                - Null values in non-nullable columns.
+                - Duplicate composite key violations.
+        '''
         errors = dict()
 
         missing_req_cols, _, not_req_cols = self._check_missing_required_cols(
@@ -362,16 +515,16 @@ class DataFrameFormatter:
         )
 
         if len(missing_req_cols) > 0:
-            errors['Error: Missing required column(s).'] = missing_req_cols
+            errors['Missing required columns.'] = missing_req_cols
 
         if len(not_req_cols) > 0:
-            errors['Warning: Contain no required columns(s).'] = not_req_cols
+            errors['Not required columns.'] = not_req_cols
 
         if len(null_in_non_nullable_cols) > 0:
-            errors['Error: Have null value(s) in non nullable columns(s).'] = null_in_non_nullable_cols
+            errors['Null values in non-nullable columns.'] = null_in_non_nullable_cols
 
         if valid_distinct_keys:
-            errors['Error: Distinct keys are not valid.'] = self._distinct_keys
+            errors['Duplicate composite key violations.'] = self._distinct_keys
 
         errors.update(type_errors)
 
