@@ -1,9 +1,13 @@
 from collections import Counter
-from typing import List, Dict, Tuple, Optional
+from typing import Any, List, Dict, Tuple, Optional
 import pandas as pd
 
+pd.DataFrame()
 
 class DataFrameFormatter:
+    '''Format the Pandas DataFrame as per specified format.
+    
+    '''
     def __init__(
         self,
         required_cols: Optional[list] = None,
@@ -11,14 +15,51 @@ class DataFrameFormatter:
         int_cols: Optional[list] = None,  # Non-nullable
         float_cols: Optional[list] = None,
         str_cols: Optional[list] = None,
-        dt_col_formats: Optional[Dict[str, str]] = None,
-        literal_col_values: Optional[Dict[str, List[str]]] = None,
+        dt_col_formats: Optional[Dict[Any, str]] = None,
+        literal_col_values: Optional[Dict[Any, List[str]]] = None,
         non_nullable_cols: Optional[list] = None,
         distinct_keys: Optional[list] = None
     ):
+        '''Pandas DataFrame Formatter
+        Args:
+            required_cols (:obj:`list`, optional): Description of `param1`.
+            bool_cols (:obj:`list`, optional): A list of column name to be formatted as boolean type. 
+            int_cols (:obj:`list`, optional): A list of column name to be formatted as integer type.
+            float_cols (:obj:`list`, optional): A list of column name to be formatted as floating point type.
+            str_cols (:obj:`list`, optional): A list of column name to be formatted as string type
+            dt_col_formats (:obj:`dict`, optional): A dictionary where the keys are 
+                column names to be formatted as datetime type
+                and the values are the format to parse datetime.
+                See strftime documentation for more information on choices:
+                https://docs.python.org/3/library/datetime.html#strftime-and-strptime-behavior
+
+        '''
         # Add distinct keys
         self._required_cols = list(set(self._defalut(required_cols, list)))
-        self._dtype_col_dict = {
+        self._dtype_col_dict = self._create_dtype_col_dict(
+            bool_cols=bool_cols,
+            int_cols=int_cols,
+            float_cols=float_cols,
+            str_cols=str_cols,
+            dt_col_formats=dt_col_formats,
+            literal_col_values=literal_col_values
+        )
+        self._check_duplicate_dtypes()
+        self._distinct_keys = list(set(self._defalut(distinct_keys, list)))
+        self._non_nullable_cols = self._create_non_nullable_cols(
+            non_nullable_cols=non_nullable_cols
+        )
+
+    def _create_dtype_col_dict(
+            self,
+            bool_cols: Optional[list] = None,  # Non-nullable
+            int_cols: Optional[list] = None,  # Non-nullable
+            float_cols: Optional[list] = None,
+            str_cols: Optional[list] = None,
+            dt_col_formats: Optional[Dict[str, str]] = None,
+            literal_col_values: Optional[Dict[str, List[str]]] = None
+    ) -> None:
+        return {
             'bool': list(set(self._defalut(bool_cols, list))),
             'int': list(set(self._defalut(int_cols, list))),
             'float': list(set(self._defalut(float_cols, list))),
@@ -26,13 +67,17 @@ class DataFrameFormatter:
             'dt': self._defalut(dt_col_formats, dict),
             'literal': self._defalut(literal_col_values, dict)
         }
-        self._check_duplicate_dtypes()
 
-        self._distinct_keys = list(set(self._defalut(distinct_keys, list)))
-
-        self._non_nullable_cols = self._create_non_nullable_cols(
-            non_nullable_cols=non_nullable_cols
-        )
+    def _check_duplicate_dtypes(self) -> None:
+        cols = list()
+        for dtype in self._dtype_col_dict:
+            cols += list(self._dtype_col_dict[dtype])
+        count_cols = Counter(cols)
+        duplicate_dtype_cols = [col for col in count_cols if count_cols[col] > 1]
+        if len(duplicate_dtype_cols) > 0:
+            raise ValueError(
+                f'the column(s): {duplicate_dtype_cols} should belong to only one data type.'
+            )
 
     def _create_non_nullable_cols(
         self,
@@ -53,17 +98,6 @@ class DataFrameFormatter:
 
         print(f'Warning: boolean, int and distinct key columns: {missing_non_nullable_cols} have been added to non nullable columns.')
         return non_nullable_cols
-
-    def _check_duplicate_dtypes(self) -> None:
-        cols = list()
-        for dtype in self._dtype_col_dict:
-            cols += list(self._dtype_col_dict[dtype])
-        count_cols = Counter(cols)
-        duplicate_dtype_cols = [col for col in count_cols if count_cols[col] > 1]
-        if len(duplicate_dtype_cols) > 0:
-            raise ValueError(
-                f'the column(s): {duplicate_dtype_cols} should belong to only one data type.'
-            )
 
     @staticmethod
     def _defalut(
@@ -182,6 +216,10 @@ class DataFrameFormatter:
             error = False
             series = formatted_series
             is_formatted = True
+        # except ParserError:
+        #     error = True
+        #     error_descs.append(f'Error: Invalid datetime format ({format}).')
+        #     is_formatted = False
         except ValueError:
             error = True
             error_descs.append(f'Error: Invalid datetime format ({format}).')
