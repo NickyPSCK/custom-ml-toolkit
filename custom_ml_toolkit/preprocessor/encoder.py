@@ -109,7 +109,8 @@ class SupportMissingOneHotEncoder(BaseEstimator, TransformerMixin):
     def _create_representative_df(
         data_df: pd.DataFrame
     ) -> pd.DataFrame:
-        '''
+        '''Creates a representative DataFrame from the given data for fitting the OneHotEncoder.
+
         Args:
             data_df (pd.DataFrame): Raw data for creating representative catagories in train set.
         Returns:
@@ -129,7 +130,14 @@ class SupportMissingOneHotEncoder(BaseEstimator, TransformerMixin):
         self,
         encoded_data_df: pd.DataFrame
     ) -> pd.DataFrame:
+        '''Replaces unknown values (NaNs) in the encoded DataFrame with a placeholder value.
 
+        Args:
+            encoded_data_df (pd.DataFrame): Encoded data with potential unknown values to replace.
+        
+        Returns:
+            pd.DataFrame: Processed encoded data frame with unknown values replaced.
+        '''
         processed_encoded_data_list = list()
         for i, feature in enumerate(self.feature_names_in_):
             encoded_feature_cols = [str(feature) + '_' + str(cat) for cat in self._ohe.categories_[i]]
@@ -151,6 +159,15 @@ class SupportMissingOneHotEncoder(BaseEstimator, TransformerMixin):
         X: pd.DataFrame,
         y=None
     ):
+        '''Fits the SupportMissingOneHotEncoder to the data.
+
+        Args:
+            X (pd.DataFrame): Training data of categorical features.
+            y: Ignored, needed for compatibility with sklearn pipeline.
+        
+        Returns:
+            self: The fitted transformer.
+        '''
         representative_x_df = self._create_representative_df(X)
         self._ohe.fit(
             X=representative_x_df
@@ -162,6 +179,14 @@ class SupportMissingOneHotEncoder(BaseEstimator, TransformerMixin):
         self,
         X: pd.DataFrame
     ) -> pd.DataFrame:
+        '''Transforms the input data by replacing unknown values and encoding categorical features.
+
+        Args:
+            X (pd.DataFrame): Data to be transformed, assumed to be of categorical type with missing values represented as NaN.
+        
+        Returns:
+            pd.DataFrame: Transformed data with unknown values replaced and categorical features one-hot encoded.
+        '''
         check_is_fitted(self)
         X = X.astype('object')
         encoded_x_df = self._ohe.transform(X)
@@ -171,6 +196,14 @@ class SupportMissingOneHotEncoder(BaseEstimator, TransformerMixin):
         self,
         X: pd.DataFrame
     ) -> pd.DataFrame:
+        '''Inverse transforms the encoded data back to the original categories, replacing placeholders with NaNs.
+
+        Args:
+            X (pd.DataFrame): Encoded data to be inverted, with placeholder values for unknown categories.
+        
+        Returns:
+            pd.DataFrame: Dataframe with placeholder values replaced by NaNs, and original categories restored.
+        '''
         check_is_fitted(self)
         return pd.DataFrame(
             self._ohe.inverse_transform(X.fillna(0)),
@@ -178,6 +211,11 @@ class SupportMissingOneHotEncoder(BaseEstimator, TransformerMixin):
         )
 
     def get_feature_names_out(self):
+        '''Retrieves feature names after transformation, accounting for whether to drop binary columns.
+
+        Returns:
+            List[str]: List of feature names after transformation.
+        '''
         check_is_fitted(self)
 
         feature_names_out = list()
